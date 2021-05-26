@@ -14,6 +14,7 @@ Key Uploader for Lido (Ethereum2)
 ## Usage
 
 ```
+export PRIV_KEY_PW="password" ## optional, so avoid entering at prompt.
 ./add_keys.py /path/to/deposit_data-1621943728.json --eth1-uri http://geth.node.com:8545  --operator 1 --pkey-file /path/to/private_key.json
 ```
 

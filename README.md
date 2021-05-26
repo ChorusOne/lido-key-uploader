@@ -22,7 +22,6 @@ The above will generate a TX based upon the keys and signatures in the deposit d
 
 Gas is, by default, set to 13500000 which is sufficient for 100 concurrent keys. It can be overridden by `--gas` flag.
 Additionally, the nonce can be overridden using `--nonce`; by default it will use the next available nonce for your given account.
-```
 
 ### Licensing
 Licensed using GPLv3, as there is code re-use and inspriration from http://github.com/lidofinance/lido-oracle.

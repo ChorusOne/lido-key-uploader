@@ -103,8 +103,8 @@ def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file):
         with open(filename, 'r', encoding='utf-8') as f:
             keyfile = json.load(f)
 
-        keys = [x.get('pubkey') for x in keyfile]
-        signatures = [x.get('signature') for x in keyfile]
+        keys = [x['pubkey'] for x in keyfile]
+        signatures = [x.get['signature'] for x in keyfile]
         logging.info("Found %d keys...", len(keys))
 
         tx = build_tx(registry, operator, keys, signatures, account, gas)

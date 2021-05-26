@@ -14,8 +14,7 @@ Key Uploader for Lido (Ethereum2)
 ## Usage
 
 ```
-export PRIV_KEY=<ACCOUNT_PRIVATE_KEY>
-./add_keys.py /path/to/deposit_data-1621943728.json --eth1-uri http://geth.node.com:8545  --operator 1
+./add_keys.py /path/to/deposit_data-1621943728.json --eth1-uri http://geth.node.com:8545  --operator 1 --pkey-file /path/to/private_key.json
 ```
 
 The above will generate a TX based upon the keys and signatures in the deposit data JSON file. 
@@ -23,10 +22,6 @@ The above will generate a TX based upon the keys and signatures in the deposit d
 Gas is, by default, set to 13500000 which is sufficient for 100 concurrent keys. It can be overridden by `--gas` flag.
 Additionally, the nonce can be overridden using `--nonce`; by default it will use the next available nonce for your given account.
 ```
-
-### TODO
-
-Use encrypted key file, as not to expose private key.
 
 ### Licensing
 Licensed using GPLv3, as there is code re-use and inspriration from http://github.com/lidofinance/lido-oracle.

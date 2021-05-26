@@ -144,7 +144,7 @@ def send_tx(w3: Web3, tx: dict, account: LocalAccount, nonce: int):
         # execute tx locally to check validity
         w3.eth.call(tx)
         logging.info('Calling tx locally succeeded.')
-        print(f'Tx data: {tx.__repr__()}')
+        print(f'Tx data: {tx!r}')
         if prompt('Should we send this TX? [y/n]: ', ''):
             sign_and_send_tx(w3, tx, account, nonce)
     except SolidityError as sl:
@@ -152,7 +152,7 @@ def send_tx(w3: Web3, tx: dict, account: LocalAccount, nonce: int):
         logging.error(f'Calling tx locally failed: {str_sl}')
     except ValueError as exc:
         (args, ) = exc.args
-        if args["code"] == -32000:
+        if args["code"] == -32000: ## code 32000 errors are from geth, so pass these through.
             raise
         else:
             logging.exception(f'Unexpected exception. {type(exc)}')

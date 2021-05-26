@@ -6,8 +6,12 @@ import logging
 import sys
 import time
 import click
+import getpass
+
+from eth_account.signers.local import LocalAccount
 from web3 import Web3, WebsocketProvider, HTTPProvider
 from web3.exceptions import SolidityError, CannotHandleRequest, TimeExhausted
+from web3.contract import Contract
 
 logger = logging.getLogger().setLevel("INFO")
 
@@ -18,7 +22,7 @@ REGISTRY_ARTIFACT_FILE = 'NodeOperatorsRegistry.json'
 GAS_LIMIT=13500000
 
 
-def init_provider(eth1_provider):
+def init_provider(eth1_provider: str) -> Web3:
     '''
     Initialise the Web3 provider.
     '''
@@ -27,13 +31,12 @@ def init_provider(eth1_provider):
     elif eth1_provider.startswith('ws'):
         provider = WebsocketProvider(eth1_provider)
     else:
-        logging.error('Unsupported ETH provider!')
-        sys.exit(1)
+        raise Exception('Unsupported ETH provider!')
 
     return Web3(provider)
 
 
-def init_contracts(w3: Web3, pool_address):
+def init_contracts(w3: Web3, pool_address: str) -> Contract:
     '''
     Initialise contracts.
     '''
@@ -48,7 +51,7 @@ def init_contracts(w3: Web3, pool_address):
     with open(pool_abi_path, 'r') as file:
         abi = json.load(file)
         file.close()
-    pool = w3.eth.contract(abi=abi['abi'], address=pool_address)  # contract object
+    pool = w3.eth.contract(abi=abi['abi'], address=pool_address)
 
     # Get Registry contract
     registry_address = pool.functions.getOperators().call()
@@ -60,19 +63,19 @@ def init_contracts(w3: Web3, pool_address):
     return w3.eth.contract(abi=abi['abi'], address=registry_address)
 
 
-def init_account(w3: Web3, pkey_file):
+def init_account(w3: Web3, pkey_file: str) -> LocalAccount:
     '''
     Initialise the signer.
     '''
     password = os.getenv('PRIV_KEY_PW')
     if password == None:
-        raise Exception("--pkey-file flag requires a password set using PRIV_KEY_PW")
+        password = getpass.getpass('Private key password: ')
+
     with open(pkey_file) as keyfile:
         encrypted_key = keyfile.read()
         account = w3.eth.account.from_key(w3.eth.account.decrypt(encrypted_key, password))
 
         logging.info(f'Account: {account.address}')
-
     return account
 
 
@@ -80,8 +83,8 @@ def init_account(w3: Web3, pkey_file):
 @click.command()
 @click.option("--nonce", default=-1, type=int, help="Nonce to use (default uses next nonce on chain)")
 @click.option("--gas", default=GAS_LIMIT, type=int, help="Gas limit - defaults to {}, which is suitable for submitting 100 keys.".format(GAS_LIMIT))
-@click.option("--operator", help="Operator ID.", type=int)
-@click.option("--pkey-file", help="Ethereum Encrypted Private Key file. Use in conjuction with PRIV_KEY_PW env var")
+@click.option("--operator", help="Operator ID.", type=int, required=True)
+@click.option("--pkey-file", help="Ethereum Encrypted Private Key file. Use in conjuction with PRIV_KEY_PW env var", required=True)
 @click.option("--eth1-uri", help="Ethereum node address", type=str)
 @click.option("--pool-address", help="Lido pool contract address - defaults to mainnet contract address", type=str, default=POOL_ADDRESS)
 @click.argument('filename')
@@ -94,18 +97,13 @@ def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file):
             eth1_uri = os.environ.get('WEB3_PROVIDER_URI', None)
             if eth1_uri == None:
                 raise Exception("Must pass --eth1-uri flag or set WEB3_PROVIDER_URI environment variable")
-        if pkey_file is None:
-            raise Exception("No private key file provided")
+
         w3 = init_provider(eth1_uri)
         registry = init_contracts(w3, pool_address)
         account = init_account(w3, pkey_file)
 
-        if operator is None:
-            raise Exception("--operator flag is required")
-
         with open(filename, 'r') as f:
             keyfile = json.load(f)
-            f.close()
 
         keys = [x.get('pubkey') for x in keyfile]
         signatures = [x.get('signature') for x in keyfile]
@@ -118,7 +116,7 @@ def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file):
         sys.exit(1)
 
 
-def build_tx(registry, operator_id, keys, signatures, account, gas):
+def build_tx(registry: Contract, operator_id: int, keys: list, signatures: list, account: LocalAccount, gas: int):
     '''
     Build an addSigningKeysOperatorBH tx from the keys and signatures provided.
     '''
@@ -127,7 +125,7 @@ def build_tx(registry, operator_id, keys, signatures, account, gas):
     if len(keys) != len(signatures):
         raise Exception("Imbalance in keys and signatures")
 
-    return registry.functions.addSigningKeysOperatorBH(
+    tx = registry.functions.addSigningKeysOperatorBH(
         operator_id,
         len(keys),
         "".join(keys),
@@ -137,10 +135,13 @@ def build_tx(registry, operator_id, keys, signatures, account, gas):
         'gas': gas
     })
 
-def send_tx(w3, tx, account, nonce):
+    return tx
+
+def send_tx(w3: Web3, tx: dict, account: LocalAccount, nonce: int):
     '''
     Send the contract interaction.
     '''
+
     try:
         # execute tx locally to check validity
         w3.eth.call(tx)
@@ -163,7 +164,7 @@ def send_tx(w3, tx, account, nonce):
         logging.exception(f'Unexpected exception. {type(exc)}')
 
 
-def sign_and_send_tx(w3, tx, account, nonce):
+def sign_and_send_tx(w3: Web3, tx: dict, account: LocalAccount, nonce: int):
     logging.info('Preparing TX... CTRL-C to abort')
     time.sleep(3)  # To be able to Ctrl + C
 
@@ -193,7 +194,7 @@ def sign_and_send_tx(w3, tx, account, nonce):
         logging.warning(tx_receipt)
 
 
-def prompt(prompt_message, prompt_end):
+def prompt(prompt_message: str, prompt_end: str) -> str:
     '''
     Prompt for user input.
     '''

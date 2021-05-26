@@ -48,18 +48,16 @@ def init_contracts(w3: Web3, pool_address: str) -> Contract:
     registry_abi_path = os.path.join(ARTIFACTS_DIR, REGISTRY_ARTIFACT_FILE)
 
     # Get Pool contract
-    with open(pool_abi_path, 'r') as file:
+    with open(pool_abi_path, 'r', encoding='utf-8') as file:
         abi = json.load(file)
-        file.close()
     pool = w3.eth.contract(abi=abi['abi'], address=pool_address)
 
     # Get Registry contract
     registry_address = pool.functions.getOperators().call()
     logging.info(f'{registry_address=}')
 
-    with open(registry_abi_path, 'r') as file:
+    with open(registry_abi_path, 'r', encoding='utf-8') as file:
         abi = json.load(file)
-        file.close()
     return w3.eth.contract(abi=abi['abi'], address=registry_address)
 
 
@@ -71,7 +69,7 @@ def init_account(w3: Web3, pkey_file: str) -> LocalAccount:
     if password == None:
         password = getpass.getpass('Private key password: ')
 
-    with open(pkey_file) as keyfile:
+    with open(pkey_file, encoding='utf-8') as keyfile:
         encrypted_key = keyfile.read()
         account = w3.eth.account.from_key(w3.eth.account.decrypt(encrypted_key, password))
 
@@ -102,7 +100,7 @@ def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file):
         registry = init_contracts(w3, pool_address)
         account = init_account(w3, pkey_file)
 
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             keyfile = json.load(f)
 
         keys = [x.get('pubkey') for x in keyfile]

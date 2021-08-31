@@ -82,11 +82,14 @@ def init_account(w3: Web3, pkey_file: str) -> LocalAccount:
 @click.option("--nonce", default=-1, type=int, help="Nonce to use (default uses next nonce on chain)")
 @click.option("--gas", default=GAS_LIMIT, type=int, help="Gas limit - defaults to {}, which is suitable for submitting 100 keys.".format(GAS_LIMIT))
 @click.option("--operator", help="Operator ID.", type=int, required=True)
-@click.option("--pkey-file", help="Ethereum Encrypted Private Key file. Use in conjuction with PRIV_KEY_PW env var", required=True)
+@click.option("--chunk-size", default=20, help="Number of keys per transaction", type=int)
+@click.option("--operator-address", help="Operator ethereum address", type=str)
+@click.option("--pkey-file", help="Ethereum Encrypted Private Key file. Use in conjuction with PRIV_KEY_PW env var", required=False)
 @click.option("--eth1-uri", help="Ethereum node address", type=str)
+@click.option("--validate", default=True, help="Validate transaction locally", type=bool)
 @click.option("--pool-address", help="Lido pool contract address - defaults to mainnet contract address", type=str, default=POOL_ADDRESS)
 @click.argument('filename')
-def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file):
+def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file, operator_address, chunk_size, validate):
     '''
     Main entrypoint.
     '''
@@ -98,23 +101,43 @@ def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file):
 
         w3 = init_provider(eth1_uri)
         registry = init_contracts(w3, pool_address)
-        account = init_account(w3, pkey_file)
+        if pkey_file == None:
+            print("Operation w/o private key. Only generating TX data.")
+        else:       
+            account = init_account(w3, pkey_file)
 
         with open(filename, 'r', encoding='utf-8') as f:
             keyfile = json.load(f)
 
-        keys = [x['pubkey'] for x in keyfile]
-        signatures = [x.get['signature'] for x in keyfile]
-        logging.info("Found %d keys...", len(keys))
+        basename = os.path.basename(filename).split('.')[0]
 
-        tx = build_tx(registry, operator, keys, signatures, account, gas)
-        send_tx(w3, tx, account, nonce)
+        # Chunk files
+        keyfile_chunks = chunks(keyfile,chunk_size)
+        chunk_idx = 0
+        for key_chunk in keyfile_chunks:
+
+            keys = [x['pubkey'] for x in key_chunk]
+            signatures = [x.get('signature') for x in key_chunk]
+            logging.info("Found %d keys in chunk %d...", len(keys), chunk_idx)
+
+            chunk_idx = chunk_idx + 1
+            if pkey_file == None:
+
+                tx = build_tx(registry, operator, keys, signatures, operator_address, gas)
+                print_tx(w3, tx,chunk_idx, basename, validate)
+            else:
+                tx = build_tx(registry, operator, keys, signatures, account.address, gas)
+                send_tx(w3, tx, account, nonce, validate)
     except Exception as e:
         print("Error: {}".format(e))
         sys.exit(1)
 
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
-def build_tx(registry: Contract, operator_id: int, keys: list, signatures: list, account: LocalAccount, gas: int):
+def build_tx(registry: Contract, operator_id: int, keys: list, signatures: list, address: str, gas: int):
     '''
     Build an addSigningKeysOperatorBH tx from the keys and signatures provided.
     '''
@@ -129,20 +152,59 @@ def build_tx(registry: Contract, operator_id: int, keys: list, signatures: list,
         "".join(keys),
         "".join(signatures)
     ).buildTransaction({
-        'from': account.address,
+        'from': address,
         'gas': gas
     })
 
     return tx
 
-def send_tx(w3: Web3, tx: dict, account: LocalAccount, nonce: int):
+def print_tx(w3: Web3, tx: dict, chunk: int, basename: str, verify: bool):
     '''
     Send the contract interaction.
     '''
 
     try:
         # execute tx locally to check validity
-        w3.eth.call(tx)
+        
+        if verify == True:
+            w3.eth.call(tx)
+            logging.info('Calling tx locally succeeded.')
+        else:
+            logging.warn('Tx not locally verified.')
+        
+        
+        f = open(f'{basename}-chunk-{chunk}', "w")
+        f.write(tx['data'])
+        f.close()
+        print(f'Tx data: {tx!r}')
+        
+    except SolidityError as sl:
+        str_sl = str(sl)
+        logging.error(f'Calling tx locally failed: {str_sl}')
+    except ValueError as exc:
+        (args, ) = exc.args
+        if args["code"] == -32000: ## code 32000 errors are from geth, so pass these through.
+            raise
+        else:
+            logging.exception(f'Unexpected exception. {type(exc)}')
+    except TimeExhausted as exc:
+        raise
+    except Exception as exc:
+        logging.exception(f'Unexpected exception. {type(exc)}')
+
+def send_tx(w3: Web3, tx: dict, account: LocalAccount, nonce: int, verify: bool):
+    '''
+    Send the contract interaction.
+    '''
+
+    try:
+        # execute tx locally to check validity
+        if verify == True:
+            w3.eth.call(tx)
+            logging.info('Calling tx locally succeeded.')
+        else:
+            logging.warn('Tx not locally verified.')
+
         logging.info('Calling tx locally succeeded.')
         print(f'Tx data: {tx!r}')
         if prompt('Should we send this TX? [y/n]: ', ''):

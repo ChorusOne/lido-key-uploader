@@ -86,9 +86,10 @@ def init_account(w3: Web3, pkey_file: str) -> LocalAccount:
 @click.option("--operator-address", help="Operator ethereum address", type=str)
 @click.option("--pkey-file", help="Ethereum Encrypted Private Key file. Use in conjuction with PRIV_KEY_PW env var", required=False)
 @click.option("--eth1-uri", help="Ethereum node address", type=str)
+@click.option("--validate", default=True, help="Validate transaction locally", type=bool)
 @click.option("--pool-address", help="Lido pool contract address - defaults to mainnet contract address", type=str, default=POOL_ADDRESS)
 @click.argument('filename')
-def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file, operator_address, chunk_size):
+def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file, operator_address, chunk_size, validate):
     '''
     Main entrypoint.
     '''
@@ -123,10 +124,10 @@ def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file, oper
             if pkey_file == None:
 
                 tx = build_tx(registry, operator, keys, signatures, operator_address, gas)
-                print_tx(w3, tx,chunk_idx, basename, )
+                print_tx(w3, tx,chunk_idx, basename, validate)
             else:
                 tx = build_tx(registry, operator, keys, signatures, account.address, gas)
-                send_tx(w3, tx, account, nonce)
+                send_tx(w3, tx, account, nonce, validate)
     except Exception as e:
         print("Error: {}".format(e))
         sys.exit(1)
@@ -168,11 +169,11 @@ def print_tx(w3: Web3, tx: dict, chunk: int, basename: str, verify: bool):
         if verify == True:
             w3.eth.call(tx)
             logging.info('Calling tx locally succeeded.')
-        else
+        else:
             logging.warn('Tx not locally verified.')
         
         
-        f = open(f'{basename}-chunk-{chunk}', "a")
+        f = open(f'{basename}-chunk-{chunk}', "w")
         f.write(tx['data'])
         f.close()
         print(f'Tx data: {tx!r}')
@@ -191,14 +192,19 @@ def print_tx(w3: Web3, tx: dict, chunk: int, basename: str, verify: bool):
     except Exception as exc:
         logging.exception(f'Unexpected exception. {type(exc)}')
 
-def send_tx(w3: Web3, tx: dict, account: LocalAccount, nonce: int):
+def send_tx(w3: Web3, tx: dict, account: LocalAccount, nonce: int, verify: bool):
     '''
     Send the contract interaction.
     '''
 
     try:
         # execute tx locally to check validity
-        w3.eth.call(tx)
+        if verify == True:
+            w3.eth.call(tx)
+            logging.info('Calling tx locally succeeded.')
+        else:
+            logging.warn('Tx not locally verified.')
+
         logging.info('Calling tx locally succeeded.')
         print(f'Tx data: {tx!r}')
         if prompt('Should we send this TX? [y/n]: ', ''):

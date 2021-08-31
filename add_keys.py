@@ -19,7 +19,7 @@ ARTIFACTS_DIR = './assets'
 POOL_ADDRESS = "0xae7ab96520de3a18e5e111b5eaab095312d7fe84"
 POOL_ARTIFACT_FILE = 'Lido.json'
 REGISTRY_ARTIFACT_FILE = 'NodeOperatorsRegistry.json'
-GAS_LIMIT=4000000
+GAS_LIMIT=13500000
 
 
 def init_provider(eth1_provider: str) -> Web3:
@@ -123,7 +123,7 @@ def main(filename, nonce, operator, gas, eth1_uri, pool_address, pkey_file, oper
             if pkey_file == None:
 
                 tx = build_tx(registry, operator, keys, signatures, operator_address, gas)
-                print_tx(w3, tx,chunk_idx, basename)
+                print_tx(w3, tx,chunk_idx, basename, )
             else:
                 tx = build_tx(registry, operator, keys, signatures, account.address, gas)
                 send_tx(w3, tx, account, nonce)
